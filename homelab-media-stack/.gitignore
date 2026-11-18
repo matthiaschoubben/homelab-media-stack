@@ -1,0 +1,11 @@
+# Secrets
+.env
+*.token
+
+# Application data (databases, libraries, users)
+config/
+homarr/
+
+# Caddy state (certificates, ACME account)
+caddy_data/
+caddy_config/

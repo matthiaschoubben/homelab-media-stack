@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh UPnP port mapping for Caddy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/upnp-map.sh

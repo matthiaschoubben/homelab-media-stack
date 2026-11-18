@@ -1,0 +1,36 @@
+# Caddy reverse proxy for Jellyfin.
+# {$VAR} values are read from the container's environment (see .env.example).
+#   BASE_DOMAIN   e.g. your-subdomain.duckdns.org
+#   JELLYFIN_HOST e.g. random-string.your-subdomain.duckdns.org (keep it non-obvious)
+
+{
+	https_port 44300
+	auto_https disable_redirects
+}
+
+*.{$BASE_DOMAIN} {
+	# Wildcard certificate via the DNS-01 challenge: no port 80 needed, and the
+	# real hostname never appears in Certificate Transparency logs.
+	tls {
+		dns duckdns {env.DUCKDNS_TOKEN}
+		propagation_delay 120s
+		resolvers 1.1.1.1 9.9.9.9
+	}
+
+	# Only the exact Jellyfin hostname is proxied.
+	@jellyfin host {$JELLYFIN_HOST}
+	handle @jellyfin {
+		reverse_proxy jellyfin:8096
+		header {
+			Strict-Transport-Security "max-age=31536000"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "no-referrer"
+			-Server
+		}
+	}
+
+	# Any other hostname under the wildcard: close the connection.
+	handle {
+		abort
+	}
+}

@@ -1,0 +1,12 @@
+[jellyfin]
+enabled  = true
+backend  = auto
+filter   = jellyfin
+# Absolute path to Jellyfin's log folder on the host (the ./config/jellyfin
+# bind mount from docker-compose.yml). Adjust to your compose folder.
+logpath  = /path/to/compose-folder/config/jellyfin/log/log_*.log
+maxretry = 3
+findtime = 12h
+bantime  = 1d
+# Container traffic is DNATed and passes FORWARD, not INPUT: ban in DOCKER-USER.
+action   = iptables-allports[name=jellyfin, chain=DOCKER-USER]

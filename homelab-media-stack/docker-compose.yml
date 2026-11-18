@@ -1,0 +1,216 @@
+# Home media stack. Only Caddy (port 44300) is exposed to the internet;
+# every other port below is LAN/Tailscale-only and must NOT be forwarded.
+# Secrets come from .env (see .env.example).
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
+    user: "1000:1000"
+    ports:
+      - "8096:8096"              # LAN access only, never forwarded
+      - "7359:7359/udp"          # client auto-discovery on the LAN
+    volumes:
+      - ./config/jellyfin:/config
+      - ./config/jellyfin-cache:/cache
+      - /mnt/media/movies:/movies:ro
+      - /mnt/media/tv:/tv:ro
+      - /mnt/media/anime:/anime:ro
+    environment:
+      - TZ=Europe/Brussels
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+    restart: unless-stopped
+    # Hardware transcoding (Intel Quick Sync), not enabled yet:
+    # devices:
+    #   - /dev/dri/renderD128:/dev/dri/renderD128
+    # group_add:
+    #   - "<GID of the host's render group: getent group render>"
+
+  caddy:
+    build: ./caddy
+    container_name: caddy
+    ports:
+      - "44300:44300"
+    env_file: .env
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      proxy:
+        ipv4_address: 172.30.0.2   # fixed: set as "Known proxy" in Jellyfin
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr
+    container_name: sonarr
+    ports:
+      - 8989:8989
+    volumes:
+      - ./config/sonarr:/config
+      - /mnt/media/tv:/tv
+      - /mnt/media/anime:/anime
+      - /mnt/media/downloads:/downloads
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr
+    container_name: radarr
+    ports:
+      - 7878:7878
+    volumes:
+      - ./config/radarr:/config
+      - /mnt/media/movies:/movies
+      - /mnt/media/downloads:/downloads
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: qbittorrent
+    ports:
+      - 8080:8080
+    volumes:
+      - ./config/qbittorrent:/config
+      - /mnt/media/downloads:/downloads
+    environment:
+      - WEBUI_PORT=8080
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_USERNAME=admin
+      - WEBUI_PASSWORD=${QBIT_PASSWORD}
+    restart: unless-stopped
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    ports:
+      - 5055:5055
+    volumes:
+      - ./config/jellyseerr:/app/config
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Brussels
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr
+    container_name: prowlarr
+    ports:
+      - 9696:9696
+    volumes:
+      - ./config/prowlarr:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+    restart: unless-stopped
+
+  jackett:
+    image: lscr.io/linuxserver/jackett
+    container_name: jackett
+    ports:
+      - 9117:9117
+    volumes:
+      - ./config/jackett:/config
+      - /mnt/media/downloads:/downloads
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    ports:
+      - 8191:8191
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Europe/Brussels
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr
+    container_name: bazarr
+    ports:
+      - 6767:6767
+    volumes:
+      - ./config/bazarr:/config
+      - /mnt/media/movies:/movies
+      - /mnt/media/tv:/tv
+      - /mnt/media/anime:/anime
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+    restart: unless-stopped
+
+  homarr:
+    image: ghcr.io/homarr-labs/homarr:latest
+    container_name: homarr
+    ports:
+      - 7575:7575
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./homarr/configs:/appdata/configs
+      - ./homarr/icons:/appdata/icons
+      - ./homarr/data:/data
+    environment:
+      - SECRET_ENCRYPTION_KEY=${HOMARR_SECRET_KEY}
+    restart: unless-stopped
+
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    container_name: syncthing
+    ports:
+      - 8384:8384
+      - 22000:22000/tcp
+      - 22000:22000/udp
+      - 21027:21027/udp
+    volumes:
+      - ./config/syncthing:/config
+      - /mnt/media/obsidian:/data/obsidian
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+    restart: unless-stopped
+
+  dashdot:
+    image: mauricenino/dashdot:latest
+    container_name: dashdot
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "3001:3001"
+    volumes:
+      - /:/mnt/host:ro
+    environment:
+      - DASHDOT_ENABLE_CPU_TEMPS=true
+
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config/adguard/work:/opt/adguardhome/work
+      - ./config/adguard/conf:/opt/adguardhome/conf
+
+# Caddy and Jellyfin only. Everything else stays on the default network,
+# so a compromised proxy has no Docker route to the other services.
+networks:
+  proxy:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:

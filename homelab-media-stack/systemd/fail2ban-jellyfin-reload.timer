@@ -1,0 +1,8 @@
+[Unit]
+Description=Hourly reload of fail2ban jellyfin jail
+
+[Timer]
+OnCalendar=hourly
+
+[Install]
+WantedBy=timers.target

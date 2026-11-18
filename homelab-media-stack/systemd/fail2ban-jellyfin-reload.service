@@ -1,0 +1,6 @@
+[Unit]
+Description=Reload fail2ban jellyfin jail to pick up new log files
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/fail2ban-client reload jellyfin
